@@ -54,7 +54,7 @@ func logMessageWithColor(m string, c *color.Color) {
 
 func logDebug(flag bool, format string, v ...interface{}) {
 	if flag {
-		logBlue(format, v)
+		logBlue(format, v...)
 	}
 }
 
@@ -63,6 +63,6 @@ func logDefault(format string, v ...interface{}) {
 }
 
 func logFatal(format string, v ...interface{}) {
-	logRed(format, v)
+	logRed(format, v...)
 	os.Exit(1)
 }

@@ -4,6 +4,7 @@ import (
 	"flag"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -72,8 +73,8 @@ func validatePath() {
 
 func organize() {
 	filepath.Walk(flagPath, visit)
-	// Since we are renaming paths, and filepath.Walk walks the file tree lexically, we should rename starting from the end of the array
 
+	// Since we are renaming paths, and filepath.Walk walks the file tree lexically, we should rename starting from the end of the array
 	for i := len(specs) - 1; i >= 0; i-- {
 		// Rename the shows
 		spec := specs[i]
@@ -82,16 +83,18 @@ func organize() {
 		renameErr := os.Rename(spec.OldPath, spec.NewPath)
 		if renameErr != nil {
 			logRed("Unable to rename file: %s", renameErr.Error())
-		}
-		if mainFolderPath, exists := showFoldersPaths[spec.MainFolder]; exists {
-			// TODO: Move shit
-			logGreen("Main folder: %s", mainFolderPath)
+		} else if mainFolderPath, exists := showFoldersPaths[spec.MainFolder]; exists {
+			logGreen("Main folder path: %s", mainFolderPath)
+			cmd := exec.Command("mv", spec.NewPath, mainFolderPath)
+			moveOutput, moveErr := cmd.CombinedOutput()
+			if len(moveOutput) > 0 {
+				logYellow("%s", string(moveOutput))
+			}
+			if moveErr != nil {
+				logRed("Unable to move to directory to the main folder: %s", moveErr.Error())
+			}
 		}
 	}
-
-	// for k, v := range showFoldersPaths {
-	// 	logDefault("%s:%s", k, v)
-	// }
 }
 
 func visit(path string, f os.FileInfo, err error) (e error) {
@@ -108,8 +111,8 @@ func checkPath(path string) {
 
 	dirName := strings.TrimSpace(filepath.Base(path))
 
-	showFoldersRegex := regexp.MustCompile("(.*) Season [0-9]{1,2}")
-	showNameRegex := regexp.MustCompile("(.*)(((S|s)[0-9]{1,2}(E|e)[0-9]{1,2})|(Season(.+)[0-9]{1,2}(.+)Episode(.+)[0-9]{1,2}))")
+	showFoldersRegex := regexp.MustCompile("(?i)(.*) Season [0-9]{1,2}")
+	showNameRegex := regexp.MustCompile("(?i)(.*)(((S|s)[0-9]{1,2}(E|e)[0-9]{1,2})|(Season(.+)[0-9]{1,2}(.+)Episode(.+)[0-9]{1,2}))")
 	showFoldersIndex := showFoldersRegex.FindStringIndex(dirName)
 	showNameIndex := showNameRegex.FindStringIndex(dirName)
 
@@ -133,9 +136,16 @@ func checkPath(path string) {
 		return
 	}
 
-	newDirName, mainFolder := getNewDirNameAndMainFolder(dirNameSplit)
+	newDirName := getNewDirNameAndMainFolder(dirNameSplit)
 	if newDirName == "" {
 		return
+	}
+
+	// Extract the main folder name from the new directory name (if possible)
+	var mainFolder string
+	mainFolderNameIndex := showFoldersRegex.FindStringIndex(newDirName)
+	if mainFolderNameIndex != nil {
+		mainFolder = newDirName[mainFolderNameIndex[0]:mainFolderNameIndex[1]]
 	}
 
 	// Figure out the old path and new path
@@ -148,7 +158,7 @@ func checkPath(path string) {
 	}
 }
 
-func getNewDirNameAndMainFolder(dirNameSplit []string) (newDirName string, mainFolder string) {
+func getNewDirNameAndMainFolder(dirNameSplit []string) (newDirName string) {
 
 	// Acronym Variable used for building any acroynms such as S.H.I.E.L.D.
 	var acronym string
@@ -180,7 +190,6 @@ func getNewDirNameAndMainFolder(dirNameSplit []string) (newDirName string, mainF
 			if seasonNumber == "" || episodeNumber == "" {
 				return
 			}
-			mainFolder = newDirName + "Season " + seasonNumber
 			newSeasonEp := "Season " + seasonNumber + " Episode " + episodeNumber
 			dirNameSplit[i] = newSeasonEp
 		}
@@ -202,7 +211,7 @@ func getNewDirNameAndMainFolder(dirNameSplit []string) (newDirName string, mainF
 	// Remove the extra whitespace we added at the end
 	newDirName = newDirName[0 : len(newDirName)-1]
 
-	return newDirName, mainFolder
+	return newDirName
 }
 
 func getSeasonAndEpNumber(seasonEpisode string) (sNum string, epNum string) {
